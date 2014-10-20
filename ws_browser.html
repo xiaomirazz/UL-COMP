@@ -1,0 +1,643 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head> 
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" /> 
+
+	<title>UL-CoMP System Test App</title> 
+        <link type="text/css" rel="stylesheet" href="http://localhost/static/layout-default-latest.css" />
+        
+        
+        <style type="text/css">
+
+	.ui-layout-pane {
+		background:	#EEE;
+	}
+	.ui-layout-west {
+		background:	#FFF;
+	}
+	.ui-layout-center {
+		background:	#DDD;
+		padding:	0; /* IMPORTANT - remove padding so pane can 'collapse' to 0-width */
+		}
+		.ui-layout-center > .wrapper {
+			padding:	10px;
+		}
+	.ui-layout-pane			{ border-width:			0; }
+	.ui-layout-north		{ border-bottom-width:	1px; }
+	.ui-layout-south		{ border-top-width:		1px; }
+	.ui-layout-resizer-west { border-width:			0 1px; }
+	.ui-layout-toggler-west { border-width:			0; }
+	.ui-layout-toggler-west div {
+		width:	8px;
+		height:	35px; /* 3x 35 = 105 total height */
+	}
+	.ui-layout-toggler-west .btnCenter	{ background: #00C; }
+	.ui-layout-toggler-west .btnWest	{ background: #090; }
+	.ui-layout-toggler-west .btnBoth	{ background: #C00; }
+
+	</style>
+         
+
+        <script type="text/javascript" src="http://localhost/static/jquery-1.11.1.js"></script> 
+	<script type="text/javascript" src="http://localhost/static/jquery-ui-latest.js"></script>
+	<script type="text/javascript" src="http://localhost/static/jquery.layout-latest.js"></script>
+        <link rel="stylesheet" type="text/css" href="http://localhost/static/examples.css" >
+	<link rel="stylesheet" type="text/css" href="http://localhost/static/dhtmlxslider.css" >
+        <script type="text/javascript" src="http://localhost/static/jquery.flot.js"></script>
+	<script type="text/javascript" src="http://localhost/static/jquery.flot.time.js"></script>
+	<script type="text/javascript" src="http://localhost/static/jquery.flot.axislabels.js"></script>	
+	<script type="text/javascript" src="http://localhost/static/jquery.flot.selection.js"></script>
+        <script type="text/javascript" src="http://localhost/static/dhtmlxcommon.js"></script>
+	<script type="text/javascript" src="http://localhost/static/dhtmlxslider.js"></script>
+        <script type="text/javascript" src="http://localhost/static/dhtmlxslider_start.js"></script>
+	<script type="text/javascript" src="http://localhost/static/jquery.switch.js"></script>
+        <script> window.dhx_globalImgPath="http://localhost/static/imgs/"</script>
+
+	 
+
+	<script type="text/javascript">
+
+	// TOGGLER CUSTOMIZATION SETTINGS
+	var toggleButtons	= '<div class="btnCenter"></div>'
+						+ '<div class="btnBoth"></div>'
+						+ '<div class="btnWest"></div>';
+
+	$(document).ready(function(){
+
+		// CREATE THE LAYOUT
+		myLayout = $('body').layout({
+			resizeWhileDragging: 			true
+		,	sizable:						false
+		,	animatePaneSizing:				true
+		,	fxSpeed:						'slow'
+		,	west__size:						"75%"
+		,	spacing_open:					0
+		,	spacing_closed:					0
+		,	west__spacing_closed:			8
+		,	west__spacing_open:				8
+		,	west__togglerLength_closed:		105
+		,	west__togglerLength_open:		105
+		,	west__togglerContent_closed:	toggleButtons
+		,	west__togglerContent_open:		toggleButtons
+		});
+
+		// customize the west-toggler events
+		myLayout.togglers.west
+			// UN-BIND DEFAULT TOGGLER FUNCTIONALITY
+			.unbind("click")
+			// BIND CUSTOM WEST METHODS
+			.find(".btnCenter")	.click( maximizeCenter ).attr("title", "Maximize Center")	.end()
+			.find(".btnWest")	.click( maximizeWest )	.attr("title", "Maximize West")		.end()
+			.find(".btnBoth")	.click( equalizePanes  ).attr("title", "Reset to 75/25")	.end()
+		;
+	});
+
+	// CUSTOM WEST METHODS
+	function maximizeCenter	(evt) { myLayout.close("west"); evt.stopPropagation(); };
+	function maximizeWest	(evt) { myLayout.sizePane("west", "100%"); myLayout.open("west"); evt.stopPropagation(); };
+	function equalizePanes	(evt) { myLayout.sizePane("west",  "75%"); myLayout.open("west"); evt.stopPropagation(); };
+
+	// GENERIC HELPER FUNCTION
+	function sizePane (pane, size) {
+		myLayout.sizePane(pane, size);
+		myLayout.open(pane); // open pane if not already
+	};
+
+    
+        // Get TrafficType via Radio 
+                var trafficType = "1";
+                function GetTrafficType() {
+                         var tType = document.getElementsByName("tType");
+                         
+                         for (var i=0;i<tType.length;i++) {
+                         if (tType[i].checked){ 
+                              	trafficType = tType[i].value;
+                                }
+			
+                         }
+                           if (trafficType == "1" ) { Yaxis = parseInt(ULThroughput); }
+                         else if (trafficType == "2" ) { Yaxis = parseInt(DLThroughput); }
+                         else if (trafficType == "3" ) { Yaxis = parseInt(DLThroughput) + parseInt(ULThroughput); }        else if (trafficType == "" ) { Yaxis = parseInt(ULThroughput); } 
+                }
+
+	$(function() {
+
+		var data = [];
+		var dataCache = [];
+		var dataset;
+		var dataWhenPaused;
+		var optionsWhenPaused;
+		var totalSeconds = 15;
+		var updateInterval = 20;
+		var now = 0;
+		var NUM_TICKS_TO_LABEL = 5;
+		var XRANGE_MAX = 300;
+		var XRANGE_MIN = 5;
+
+		var SLEEP_STATE = 0;
+		var AWAKE_STATE = 1;
+
+		var markings = [];
+
+		var COLOR_GREEN = "#00FF00";
+		var COLOR_DARKGREEN = "#006633";
+		var COLOR_BLUE = "#0000FF";
+		var COLOR_PURPLE = "#9900FF";
+		var COLOR_PINK = "#FF0066";
+		var COLOR_ORANGE = "#FF6600";
+		var COLOR_RED = "#F00000";
+		var COLOR_BLACK = "#000000";
+		
+		var DRXMSG_HEARTBEAT = 1;
+		var DRXMSG_START = 2;
+		var DRXMSG_STOP = 3;
+		var DRXMSG_STATUSCHANGE = 4;
+		var DRXMSG_UPDATE = 5;
+		var DRXMSG_TCSTOP = 6;
+
+		var TRAFFIC_TYPE_NONE = 0;
+		var TRAFFIC_TYPE_ULTRAFFIC = 1;
+		var TRAFFIC_TYPE_DLTRAFFIC = 2;
+                var TRAFFIC_TYPE_TotalTRAFFIC = 3;
+                var TRAFFIC_TYPE_BACKGROUND = 4;
+                
+                var SLEEP_POWER_CONSTANT = 18.3;
+		var AWAKE_POWER_CONSTANT = 120.3;
+		var VOLTAGE_CONSTANT = 3.8;
+                
+                var MAX_SECONDS_BETWEEN_MSGS = 0;
+                
+                var CellID = "";
+                var SectorID = "";
+                var ULMCS = "";
+                var DLMCS = "";
+                var ULSNR = "";
+                var ULThroughput = "";
+		var DLThroughput = "";
+                
+
+                var placeholder = $("#placeholder");
+                
+                function Reset() {
+			document.getElementById('stopTestReceived').innerHTML = "FALSE";
+			InitData();
+			$("#resetBtn").hide();
+			document.getElementById('testIter').innerHTML = "1";
+			$("#statsTable").find("tr:gt(1)").remove();
+			var tblRow = "<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>";
+			$("#statsTable").append(tblRow);
+			document.getElementById('debugMsg').innerHTML = "";
+			markings.length = 0; // Remove start/stop lines in graph.
+		}
+
+		function InitData() {
+			var temp;
+			data.length = 0;
+			dataCache.length = 0;
+			now = 0;
+			while (data.length < XRANGE_MAX * 50) {
+				temp = [now -= updateInterval, AWAKE_STATE];
+				data.unshift(temp);
+			}
+			dataCache = data.slice(0);
+			now = 0;
+		}
+                
+               
+               
+               			
+		try {
+		      websocket = new WebSocket('ws://localhost:8000/ws');
+		      websocket.onopen    = function (evt) { websocket.send('STARTTEST'); }; // handshake message to start the test
+		      websocket.onclose   = function (evt) { console.log("Disconnected");  };
+		      websocket.onmessage = function (evt) { 
+				var msgType = 2;
+				var msg = evt.data;
+				var msgArray = msg.split(",");
+				
+                                var msg0 = msgArray[0];
+	                        var msg1 = msgArray[1];
+                                var msg2 = msgArray[2];
+                                var msg3 = msgArray[3];
+                                var msg4 = msgArray[4];
+                                var msg5 = msgArray[5];
+ 		         	var msg6 = msgArray[6];
+
+                                CellID = msg0;                 
+                                SectorID = msg1;
+                                ULMCS = msg2;
+                                DLMCS = msg3;
+                                ULSNR = parseInt(msg4);
+                                ULThroughput = (msg5/1000);
+                                DLThroughput = (msg6/1000);
+	               
+                               
+                                if (trafficType == "1" ) { Yaxis = parseInt(ULThroughput); }
+                         else if (trafficType == "2" ) { Yaxis = parseInt(DLThroughput); }
+                         else if (trafficType == "3" ) { Yaxis = parseInt(DLThroughput) + parseInt(ULThroughput); }        else if (trafficType == "" ) { Yaxis = parseInt(ULThroughput); }   
+
+		         	document.getElementById('timeLastMsg').innerHTML = new Date().getTime();
+		        	
+                                if (document.getElementById('stopTestReceived').innerHTML == "TRUE") {
+					// We are restarting after having finished a test case/suite.
+					Reset();
+					update();
+					$("#resetZoom").hide();	
+					$("#pauseBtn").show();	
+				}
+
+				if (document.getElementById('testIter').innerHTML == "") {
+					InitData();
+					update(); // If we're in here, this is the first time a DRX message has been received, so go ahead and start the moving graph.
+					document.getElementById('testIter').innerHTML = 1;
+					$("#resetBtn").hide();
+					$("#resetZoom").hide();	
+				}
+				// Check message type received & handle it.
+				if (msgType == DRXMSG_START) { // start traffic
+					document.getElementById('DRXStarted').innerHTML = "TRUE";
+					
+
+			// markings.push({ xaxis: { from: now, to: now }, color: GetColorForTrafficType() });
+                                        					
+					if (document.getElementById('testIter').innerHTML == "1") {$('#statsTable tr:last').remove();}
+					var tblRow = "<tr style='color: "+ document.getElementById('tType').innerHTML +"'><td>"+document.getElementById('testIter').innerHTML+"</td><td>" + CellID +"</td><td>" + SectorID + "</td><td>" + ULMCS + "</td><td>" + DLMCS + "</td><td>" + ULSNR + "</td><td>"+ULThroughput+"</td><td>"+DLThroughput+"</td></tr>";
+					$("#statsTable").append(tblRow);
+					document.getElementById('state').innerHTML = AWAKE_STATE;
+				}
+				else if (msgType == DRXMSG_STOP) {
+					// stop traffic
+					document.getElementById('tType').innerHTML = "None";
+					document.getElementById('DRXStarted').innerHTML = "FALSE";
+					var testIter = parseInt(document.getElementById('testIter').innerHTML);
+					testIter += 1;
+					document.getElementById('testIter').innerHTML = testIter;
+					ClearSleepAwakeVars();
+					document.getElementById('state').innerHTML = AWAKE_STATE;
+					markings.push({ xaxis: { from: now, to: now }, color: GetColorForTrafficType() });
+				}
+				else if (msgType == DRXMSG_STATUSCHANGE) {
+					document.getElementById('state').innerHTML = msgArray[2];
+				}
+				else if (msgType == DRXMSG_UPDATE) {
+					document.getElementById('state').innerHTML = msgArray[2];
+				}
+				else if (msgType == DRXMSG_TCSTOP) {
+					document.getElementById('stopTestReceived').innerHTML = "TRUE";
+					document.getElementById('state').innerHTML = AWAKE_STATE;
+					document.getElementById('tType').innerHTML = "None";
+					$("#resetBtn").show();
+					$("#pauseBtn").hide();
+
+					//var d = new Date();
+					//document.getElementById('endTime').innerHTML = d;
+				}
+			};
+		      websocket.onerror   = function (evt) { alert('liqiang for test error'); };
+		} catch (exc) {
+		     elart(exc.message);
+		}
+
+
+		function UpdateCounters() {
+			if (document.getElementById('DRXStarted').innerHTML == "TRUE") {
+				var state = document.getElementById('state').innerHTML;
+				if (state == "") {  // Initially, no state means Awake.
+					state = AWAKE_STATE; 
+				}
+				if (document.getElementById('totalSleepTime').innerHTML == "") {
+					document.getElementById('totalSleepTime').innerHTML = 0;
+				}
+				if (document.getElementById('totalAwakeTime').innerHTML == "") {
+					document.getElementById('totalAwakeTime').innerHTML = 0;
+				}
+
+				if (state == 0) {
+					var sleepTime = parseInt(document.getElementById('totalSleepTime').innerHTML);
+					sleepTime += parseInt(updateInterval);
+					document.getElementById('totalSleepTime').innerHTML = sleepTime;
+				}
+				else if (state == 1) {
+					var awakeTime = parseInt(document.getElementById('totalAwakeTime').innerHTML);
+					awakeTime += parseInt(updateInterval);
+					document.getElementById('totalAwakeTime').innerHTML = awakeTime;
+				}
+			}
+		}
+
+  
+                                
+                                           		
+                
+                
+                 
+                
+
+
+ function GetData() {
+			var temp;
+
+			while (data.length > (totalSeconds * 50)) {
+				temp = data.shift();
+				dataCache.shift(); 
+				dataCache.push(temp); 
+			}
+                        temp = data.shift(); 
+
+			dataCache.shift(); 
+			dataCache.push(temp);
+                      
+                        
+                        // y = parseInt(ULThroughput);
+                        // y = Yaxis;
+                        
+			if (state == "") { state = AWAKE_STATE; }
+  
+			temp = [now += updateInterval, Yaxis];
+			data.push(temp); 
+
+			var i = dataCache.length-1;
+
+			while ((data.length < (totalSeconds * 50)) && (i >= 0)) { 
+				temp = dataCache[i];
+				data.unshift(temp);
+				i -= 1;
+			}
+			
+		}	
+
+		function UpdateDRXTable() {
+			if (document.getElementById('DRXStarted').innerHTML == "TRUE") {
+				           
+                                var tblRow = "<tr style='color: "+ document.getElementById('tType').innerHTML +"'><td>"+document.getElementById('testIter').innerHTML+"</td><td>" + CellID +"</td><td>" + SectorID + "</td><td>" + ULMCS + "</td><td>" + DLMCS + "</td><td>" + ULSNR + "</td><td>"+ULThroughput+"</td><td>"+DLThroughput+"</td></tr>";
+				$('#statsTable tr:last').remove();
+				$("#statsTable").append(tblRow);
+			}
+		}
+
+		// Set up the X-span widget
+		$("#totalSeconds").val(totalSeconds).change(function () {
+			var v = $(this).val();
+			if (v && !isNaN(+v)) {
+				totalSeconds = +v;
+				if (totalSeconds < XRANGE_MIN) {
+					totalSeconds = XRANGE_MIN;
+				} else if (totalSeconds > XRANGE_MAX) {
+					totalSeconds = XRANGE_MAX;
+				}
+				$(this).val("" + totalSeconds);
+				
+			}
+		});
+
+		// Set up the Reset button 
+		$("#resetBtn").click(function () {
+			Reset();
+			dataset = [ { data: data, color: COLOR_GREEN } ];
+			var plot = $.plot(placeholder, dataset, options);	
+			$("#resetBtn").hide();	
+		});
+
+		var options = {
+			series: {
+				shadowSize: 0, // Drawing is faster without shadows
+			},
+			grid: {
+				markings: markings
+			},
+			yaxis: {
+				min: 0,
+				max: 80,
+				minTickSize:10,
+                                // autoscaleMargin:10,
+				axisLabel: "Throughput (Mbps)",
+				axisLabelUseCanvas: true,
+				axisLabelFontSizePixels: 12,
+				axisLabelFontFamily: 'Verdana, Arial',
+				axisLabelPadding: 6
+			},
+			xaxis: {
+				tickSize: [0.1, "second"],
+				tickFormatter: function (v, axis) {
+
+					var millis = v;
+					var hours = Math.floor(millis / 3600000); // 3600000 milliseconds in an hour
+					millis = millis - (hours * 3600000);
+					var minutes = Math.floor(millis / 60000); // 60000 milliseconds in a minute
+					millis = millis - (minutes * 60000);
+					var seconds = Math.floor(millis / 1000); // 1000 milliseconds in a second
+					millis = millis - (seconds * 1000);
+						
+					var xSpan = Math.ceil((axis.max - axis.min) / 1000);
+					var tickInterval = xSpan / NUM_TICKS_TO_LABEL;  
+
+					if ( (((v/100) % (tickInterval * 10)) == 0) && (v >= 0) ) {
+						hours = hours < 10 ? "0" + hours : hours;
+						minutes = minutes < 10 ? "0" + minutes : minutes;
+						seconds = seconds < 10 ? "0" + seconds : seconds;
+						millis = millis < 10 ? "0" + millis : millis;
+						millis = millis >= 100 ? (millis/10) : millis;
+
+						return hours + ":" + minutes + ":" + seconds + ":" + millis;
+					} else {
+						return "";
+					}
+				},
+				mode: "time",
+				timeformat: "%H:%M:%S",
+				axisLabel: "Time",
+				axisLabelUseCanvas: true,
+				axisLabelFontSizePixels: 12,
+				axisLabelFontFamily: 'Verdana, Arial',
+				axisLabelPadding: 10
+			},
+			selection: {
+				mode: "x"
+			}
+		};
+
+		// Set up the Pause/Continue button 
+		$("#pauseBtn").click(function () {
+			if ($("#pauseBtn").attr("value") == "Pause") {
+				$("#pauseBtn").prop('value', 'Continue');	
+				dataWhenPaused = data.slice(0);
+				//dataWhenPaused = data;		
+			}
+			else {
+				$("#pauseBtn").prop('value', 'Pause');
+				$("#resetZoom").hide();	
+				update();
+			}			
+		});
+
+		// Set up the Reset Zoom button
+		$("#resetZoom").click(function () {
+			dataset = [
+				{ data: dataWhenPaused, color: COLOR_GREEN }
+			];
+			plot = $.plot(placeholder, dataset, options);
+			$("#resetZoom").hide();	
+		});
+
+		placeholder.bind("plotselected", function (event, ranges) {
+			if ($("#pauseBtn").attr("value") == "Continue") {
+				$("#resetZoom").show();	
+				dataset = [
+					{ data: dataWhenPaused, color: COLOR_GREEN }
+				];
+				plot = $.plot(placeholder, dataset, $.extend(true, {}, options, {
+					xaxis: {
+						min: ranges.xaxis.from,
+						max: ranges.xaxis.to
+					}
+				}));
+			}
+		});
+
+		if (document.getElementById('testIter').innerHTML == "") { // We have not received any DRX messages yet. Drawing blank graph.
+			dataset = [
+				{ data: data, color: COLOR_GREEN }
+			];
+
+			var plot = $.plot(placeholder, dataset, options);
+		}
+
+		function update() {
+
+			UpdateCounters();
+			GetData();
+
+			// Stop updating the graph if no new DRX message received for # seconds, or DRX TC STOP message has been received.
+			var thisNow = new Date().getTime();
+			var timePassed = (thisNow - parseInt(document.getElementById('timeLastMsg').innerHTML));
+
+			var stopTest = document.getElementById('stopTestReceived').innerHTML;
+			if (((isNaN(timePassed)) || (MAX_SECONDS_BETWEEN_MSGS == 0) || (timePassed <= (MAX_SECONDS_BETWEEN_MSGS * 1000))) && (stopTest != "TRUE")) {	
+ 				setTimeout(update, updateInterval);
+			}
+			else if ((MAX_SECONDS_BETWEEN_MSGS != 0) && (timePassed > (MAX_SECONDS_BETWEEN_MSGS * 1000))) {
+				document.getElementById('debugMsg').innerHTML = "No DRX message received within last " + MAX_SECONDS_BETWEEN_MSGS + " seconds. Stopping test.";
+			}
+
+			if ($("#pauseBtn").attr("value") == "Pause") {
+				dataset = [
+					{ data: data, color: COLOR_GREEN }
+				];
+				plot = $.plot(placeholder, dataset, options);
+			}
+			UpdateDRXTable();
+		};
+
+		// Add the Flot version string to the footer
+		$("#footer").prepend("Flot " + $.plot.version + " &ndash; ");
+	});
+   
+		function GetCell(){
+			var tType = document.getElementById("input1").value;
+			websocket.send(tType);
+		}
+	</script> 
+
+	
+
+</head> 
+<body> 
+<div class="ui-layout-west"> 
+
+        <h1>LTE-A UL-CoMP System Status</h2>
+                <hr style="align= "left"; width:850px; color:#336666;" />	
+		<div id="placeholder" class="demo-placeholder"  ></div>
+		<!--<table><tr><td>
+		<div class="demo-container">
+			<div id="placeholder" class="demo-placeholder"></div>
+			<div id="overview" class="demo-placeholder" style="float:right;width:160px; height:75px;"></div>	
+
+		</div></td><td></td></tr></table>-->	
+
+		<p><input id="resetBtn" type="button" value="Reset">&nbsp;<input id="pauseBtn" type="button" value="Pause">&nbsp;<button id="resetZoom">Reset Zoom</button>&nbsp;&nbsp;Time range: <input id="totalSeconds" type="text" value="" style="text-align: right; width:5em"> seconds</p>
+		<!--<p>Start Time: <span id="startTime" /></p>
+		<p>End Time: <span id="endTime" /></p>-->
+		<p><span id="debugMsg" /></p>
+		<p><span id="timeLastMsg" style="display:none" /></p>		
+		<p><span id="tType" style="display:none" /></p>
+		<p><span id="totalSleepTime" style="display:none" /></p>
+		<p><span id="totalAwakeTime" style="display:none" /></p>
+		<p><span id="totalPercentSleep" style="display:none" /></p>
+		<p><span id="totalPercentAwake" style="display:none" /></p>
+		<p><span id="state" style="display:none" /></p>
+		<p><span id="testIter" style="display:none" /></p>
+		<p><span id="drxCycle" style="display:none" /></p>
+		<p><span id="stopTestReceived" style="display:none" /></p>
+		<p><span id="DRXStarted" style="display:none" /></p>
+		<p><span id="firstMsgReceived" style="display:none" /></p>
+		<table border="1" cellpadding="1" cellspacing="1" id="statsTable" style="width:100%;">
+			<tr><th bgcolor="#336666" colspan="8"><font color="#ffffff">Statistics</font></th></tr>			
+			<tr><td>Test Iteration</td><td>CellID</td><td>SectorID</td><td>ULMCS</td><td>DLMCS</td><td>ULSNR</td><td>ULThroughput (Mbps)</td><td>DLThroughput (Mbps)</td></tr>
+			<tr><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+		</table>               
+                
+ 
+
+               </div> 
+<div class="ui-layout-center"><div class="wrapper">		
+
+<form>
+<fieldset>
+<legend>UL-CoMP Switch</legend>
+<div id="container">
+
+
+ <div class="left" id="1"></div>
+ <div id="ajax"></div>
+  <div class="clear"></div>
+
+  <script type="text/javascript">
+  
+    $('#1').Switch("off", 
+     function() {
+	websocket.send('ON');
+      $.ajaxSetup({async: false});
+      $('#ajax').load('http://localhost/static/imgs/off.html');
+      },
+      function() {
+	websocket.send('OFF');
+      $.ajaxSetup({async: false});
+      $('#ajax').load('http://localhost/static/imgs/on.html');
+      },
+      {
+        switch_on_container_path: 'http://localhost/static/imgs/switch_container_off.png'
+      });
+  </script>
+
+</div>
+</form>
+</fieldset>
+
+
+<form>
+<fieldset>
+
+<legend>Select Your Traffic Types</legend>
+
+<p><input type="radio" value="1" name="tType" checked /> <label for="ULThroughput">ULThroughput</label></p>
+<p><input type="radio" value="2" name="tType" /> <label for="DLThroughput">DLThroughput</label></p>
+<p><input type="radio" value="3" name="tType" /> <label for="TotalThroughput">TotalThroughput</label></p>
+<input name="button" type="button" value="Confirm" onclick="GetTrafficType()" />
+</fieldset>
+</form>
+
+<form>
+<fieldset>               
+<legend>CellID</legend>
+<input type="text" id="input1" name="snr" style="width:50px">
+<input name="button" type="button" value="Confirm" onclick="GetCell()" />
+</fieldset>
+</form>
+
+</div></div> 
+
+
+
+</body> 
+</html> 
+
